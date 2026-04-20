@@ -124,23 +124,32 @@ def read_file(file_bytes, filename):
 # ────────────────────────────────────────────────────────────────────────────
 
 def detect_network(df):
-    """
-    Detect network from raw CDR structure.
+    # Scan first 6 rows to find the actual header row
+    # (some networks have info rows at the top before headers)
+    all_rows = []
+    for i in range(min(6, len(df))):
+        row = [clean(v).lower() for v in df.iloc[i]]
+        all_rows.append(row)
 
-    Detection rules (in priority order):
-      Jazz    → any header contains 'aparty', 'bparty', or 'calltype' (no space)
-      Zong    → any header contains 'call_type' (underscore)
-      Telenor → 13+ columns in the raw file
-      Ufone   → fallback
-    """
-    row0 = [clean(v).lower() for v in df.iloc[0]] if len(df) > 0 else []
+    # Flatten all scanned rows into one searchable list
+    all_text = [cell for row in all_rows for cell in row]
 
-    if any(h in ('aparty', 'bparty', 'calltype') for h in row0):
+    # Jazz: headers have no spaces (aparty, bparty, calltype)
+    if any(h in ('aparty', 'bparty', 'calltype') for h in all_text):
         return 'jazz'
-    if any('call_type' in h for h in row0):
+
+    # Zong: has call_type with underscore
+    if any('call_type' in h for h in all_text):
         return 'zong'
+
+    # Telenor: has 13+ columns AND contains 'a party' or 'b party'
+    if df.shape[1] >= 13 and any('a party' in h or 'b party' in h for h in all_text):
+        return 'telenor'
+
+    # Ufone: fallback — typically fewer columns, C2 has subscriber number
     if df.shape[1] >= 13:
         return 'telenor'
+
     return 'ufone'
 
 # ────────────────────────────────────────────────────────────────────────────
