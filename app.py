@@ -124,17 +124,16 @@ def read_file(file_bytes, filename):
 # ────────────────────────────────────────────────────────────────────────────
 
 def detect_network(df):
-    # Scan first 6 rows to find the actual header row
-    # (some networks have info rows at the top before headers)
-    all_rows = []
+    # Scan first 6 rows for header detection
+    all_text = []
     for i in range(min(6, len(df))):
         row = [clean(v).lower() for v in df.iloc[i]]
-        all_rows.append(row)
+        all_text.extend(row)
 
-    # Flatten all scanned rows into one searchable list
-    all_text = [cell for row in all_rows for cell in row]
+    # Count total columns in the file
+    total_cols = df.shape[1]
 
-    # Jazz: headers have no spaces (aparty, bparty, calltype)
+    # Jazz: field names have NO spaces (aparty, bparty, calltype)
     if any(h in ('aparty', 'bparty', 'calltype') for h in all_text):
         return 'jazz'
 
@@ -142,14 +141,11 @@ def detect_network(df):
     if any('call_type' in h for h in all_text):
         return 'zong'
 
-    # Telenor: has 13+ columns AND contains 'a party' or 'b party'
-    if df.shape[1] >= 13 and any('a party' in h or 'b party' in h for h in all_text):
+    # Telenor: always has 13 or more columns in raw file
+    if total_cols >= 13:
         return 'telenor'
 
-    # Ufone: fallback — typically fewer columns, C2 has subscriber number
-    if df.shape[1] >= 13:
-        return 'telenor'
-
+    # Ufone: has fewer columns, C2 contains subscriber number
     return 'ufone'
 
 # ────────────────────────────────────────────────────────────────────────────
