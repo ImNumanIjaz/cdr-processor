@@ -1,29 +1,23 @@
 from flask import Flask, request, send_file, render_template, jsonify
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Font, Border, Side, PatternFill, Alignment
+from openpyxl.styles import Font, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
-import io
+import io, os
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# ── Network colours for UI feedback ─────────────────────────────────────────
 NETWORK_COLORS = {
     'zong':    '#d62b2b',
     'ufone':   '#00a651',
     'jazz':    '#f7941d',
     'telenor': '#0073c2'
 }
-
 NETWORK_NAMES = {
-    'zong':    'Zong',
-    'ufone':   'Ufone',
-    'jazz':    'Jazz',
-    'telenor': 'Telenor'
+    'zong':'Zong', 'ufone':'Ufone', 'jazz':'Jazz', 'telenor':'Telenor'
 }
 
-# ── Service numbers to hide from pivot per network ───────────────────────────
 SERVICE_NUMBERS = {
     'zong': {
         "230","6009","310","1700","15","1122","6008","25","102","211",
@@ -32,9 +26,9 @@ SERVICE_NUMBERS = {
         "44342","47650","2545"
     },
     'ufone': {
-        "(blank)","414b5548","4554484e4943","476f50","497466617120486f6d657",
+        "blank","414b5548","4554484e4943","476f50","497466617120486f6d657",
         "5054434c","536869666120496e742e","55464f4e45","55666f6e65",
-        "180","1166","3404","6525","55506169"
+        "180","1166","3404","6525","55506169","1219","INTERNET","UNKNOWN"
     },
     'jazz': {
         "(blank)","3111","5188","8696","33313131","80000016","302771212",
@@ -43,17 +37,16 @@ SERVICE_NUMBERS = {
         "111","5716","8300","123","668","3444","3445","6009","6060","6064",
         "6080","6633","7770","1","5","8","47","70","188","558","773","940",
         "3977","6381","51876","347534","8885988","MO","ikTok","hatsapp",
-        "BAUTH","azzCash","azz 4G","azz","4A415A5A203447","5.34555E+57"
+        "BAUTH","azzCash","azz 4G","azz","4A415A5A203447","5.34555E+57","424"
     },
     'telenor': {
         "(blank)","230","5797","6557","7770","7788","8632","727251","727287",
         "150MB43Mins33","Bari Bachat","BudgetOffer","CALLING0Rs6","Din Bhar",
         "Freefire","FULLDAYCALL","internet","MUFT 3GB","PakvAusx","Telenorx",
-        "WhtsApp0Rs5","Win Balance"
+        "WhtsApp0Rs5","Win Balance","3737","Eid Special"
     }
 }
 
-# ── Carrier prefixes to strip per network ────────────────────────────────────
 CARRIER_PREFIXES = {
     'zong':    ["110", "92", "38"],
     'ufone':   ["9292", "92"],
@@ -61,9 +54,7 @@ CARRIER_PREFIXES = {
     'telenor': ["9292", "92"]
 }
 
-# ────────────────────────────────────────────────────────────────────────────
-# HELPER FUNCTIONS
-# ────────────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def thin_border():
     t = Side(style='thin')
@@ -77,608 +68,360 @@ def autofit_columns(ws):
             try:
                 if cell.value:
                     max_len = max(max_len, len(str(cell.value)))
-            except:
-                pass
+            except: pass
         ws.column_dimensions[col_letter].width = min(max_len + 4, 45)
 
 def clean(val):
-    """Convert a raw cell value to a clean string, empty string if null."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return ''
+    if val is None: return ''
+    import math
+    if isinstance(val, float) and math.isnan(val): return ''
     s = str(val).strip()
-    return '' if s.lower() == 'nan' else s
+    return '' if s.lower() in ('nan','none') else s
 
 def strip_prefix(value, network):
-    """Strip carrier prefix from a B-Party number."""
     s = clean(value)
-    if not s or s == '---':
-        return s
+    if not s or s == '---': return s
     for prefix in CARRIER_PREFIXES.get(network, []):
         if s.startswith(prefix):
             return s[len(prefix):]
     return s
 
 def read_file(file_bytes, filename):
-    """Read xlsx / xls / csv into a raw DataFrame (all as strings)."""
     ext = filename.rsplit('.', 1)[-1].lower()
     if ext == 'csv':
         for enc in ['utf-8', 'latin-1', 'cp1252']:
             try:
-                return pd.read_csv(
-                    io.BytesIO(file_bytes), header=None,
-                    dtype=str, encoding=enc
-                )
-            except Exception:
-                continue
-        raise ValueError("Could not decode CSV — try saving as UTF-8")
+                return pd.read_csv(io.BytesIO(file_bytes), header=None, dtype=str, encoding=enc)
+            except: continue
+        raise ValueError("Cannot read CSV")
     elif ext in ['xlsx', 'xls']:
         engine = 'openpyxl' if ext == 'xlsx' else 'xlrd'
-        return pd.read_excel(
-            io.BytesIO(file_bytes), header=None,
-            dtype=str, engine=engine
-        )
-    raise ValueError(f"Unsupported file type: .{ext}")
+        return pd.read_excel(io.BytesIO(file_bytes), header=None, dtype=str, engine=engine)
+    raise ValueError(f"Unsupported: .{ext}")
 
-# ────────────────────────────────────────────────────────────────────────────
-# NETWORK DETECTION
-# ────────────────────────────────────────────────────────────────────────────
-
-def detect_network(df):
-    # Scan first 6 rows for header detection
-    all_text = []
-    for i in range(min(6, len(df))):
-        row = [clean(v).lower() for v in df.iloc[i]]
-        all_text.extend(row)
-
-    # Count total columns in the file
-    total_cols = df.shape[1]
-
-    # Jazz: field names have NO spaces (aparty, bparty, calltype)
-    if any(h in ('aparty', 'bparty', 'calltype') for h in all_text):
-        return 'jazz'
-
-    # Zong: has call_type with underscore
-    if any('call_type' in h for h in all_text):
-        return 'zong'
-
-    # Telenor: always has 13 or more columns in raw file
-    if total_cols >= 13:
-        return 'telenor'
-
-    # Ufone: has fewer columns, C2 contains subscriber number
-    return 'ufone'
-
-# ────────────────────────────────────────────────────────────────────────────
-# ZONG PROCESSOR
-# ────────────────────────────────────────────────────────────────────────────
+# ── ZONG processor ────────────────────────────────────────────────────────────
 
 def process_zong(df):
-    """
-    Raw layout: rows 0-2 = info, row 3 = blank, row 4 = headers, row 5+ = data.
-    VBA: move col D → C, delete row 3, set headers in row 5.
-    """
-    # Info rows (Number / Name / CNIC)
-    info_rows = df.iloc[:3].copy()
+    num  = clean(df.iloc[0, 1]) if df.shape[1] > 1 else ''
+    name = clean(df.iloc[1, 1]) if df.shape[0] > 1 and df.shape[1] > 1 else ''
+    cnic = clean(df.iloc[2, 1]) if df.shape[0] > 2 and df.shape[1] > 1 else ''
+    info_rows = pd.DataFrame([['Number', num], ['Name', name], ['CNIC', cnic]])
 
-    # Move column D (index 3) before column C (index 2)
-    cols = list(range(df.shape[1]))
-    if df.shape[1] >= 4:
-        cols = [0, 1, 3, 2] + cols[4:]
-    df = df.iloc[:, cols].copy()
-    df.columns = range(df.shape[1])
+    # Find header row containing CALL_TYPE
+    hdr_idx = None
+    for i in range(len(df)):
+        row_vals = [clean(v).upper() for v in df.iloc[i]]
+        if 'CALL_TYPE' in row_vals:
+            hdr_idx = i
+            break
+    if hdr_idx is None:
+        raise ValueError("Cannot find header row in Zong file")
 
-    # Delete blank row 3 (index 3)
-    df = df.drop(index=3).reset_index(drop=True)
+    raw_hdrs = list(df.iloc[hdr_idx])
+    n = len(raw_hdrs)
+    # Move col D (BNUMBER) before col C (STRT_TM)
+    new_order = [0, 1, 3, 2] + list(range(4, n)) if n >= 4 else list(range(n))
 
-    # Row index 3 is now the header row
-    raw_hdrs = [clean(v) for v in df.iloc[3]]
-    headers = raw_hdrs if raw_hdrs else [f'Col{i}' for i in range(df.shape[1])]
+    headers = []
+    for idx in new_order:
+        h = clean(raw_hdrs[idx]) if idx < n else f'Col{idx}'
+        headers.append(h)
 
-    # Force known column names
-    def set_hdr(lst, idx, name):
-        if idx < len(lst):
-            lst[idx] = name
-    set_hdr(headers, 1, 'A Party')
-    set_hdr(headers, 2, 'B Party')
-    set_hdr(headers, 3, 'Date & Time')
-    if len(headers) > 9:
-        set_hdr(headers, 9, 'Location')
+    if len(headers) > 0: headers[0] = 'Call Type'
+    if len(headers) > 1: headers[1] = 'A Party'
+    if len(headers) > 2: headers[2] = 'B Party'
+    if len(headers) > 3: headers[3] = 'Date & Time'
+    if len(headers) > 9: headers[9] = 'Location'
 
-    # Data from index 4 onwards
-    data = df.iloc[4:].copy()
+    data = df.iloc[hdr_idx + 1:].copy()
+    if n >= 4:
+        data = data.iloc[:, new_order].copy()
     data.columns = headers[:data.shape[1]]
     data = data.reset_index(drop=True)
+    data = data[data.apply(lambda r: any(clean(v) for v in r), axis=1)]
 
-    # Strip carrier prefixes
     if 'B Party' in data.columns:
         data['B Party'] = data['B Party'].apply(lambda x: strip_prefix(x, 'zong'))
 
-    return info_rows, headers[:data.shape[1]], data
+    return info_rows, headers[:data.shape[1]], data.reset_index(drop=True)
 
-# ────────────────────────────────────────────────────────────────────────────
-# UFONE PROCESSOR
-# ────────────────────────────────────────────────────────────────────────────
+# ── UFONE processor ───────────────────────────────────────────────────────────
 
 def process_ufone(df):
-    """
-    Raw layout: C2 holds subscriber number.
-    VBA: delete cols B,F,G,L → move A→G pos, K→C pos → combine G+F for Call Type.
-    We detect columns by their header names for robustness.
-    """
-    # Subscriber number from C2
     sub_num = clean(df.iloc[1, 2]) if df.shape[0] > 1 and df.shape[1] > 2 else ''
+    info_rows = pd.DataFrame([['Number', sub_num], ['Name', ''], ['CNIC', '']])
 
-    # Delete columns at indices 1(B), 5(F), 6(G), 11(L) — go right to left
-    drop_idx = sorted([i for i in [1, 5, 6, 11] if i < df.shape[1]], reverse=True)
-    df = df.drop(columns=df.columns[drop_idx]).copy()
-    df.columns = range(df.shape[1])
+    raw_hdrs = [clean(v) for v in df.iloc[0]]
+    rename_map = {
+        'a number': 'A Party', 'b number': 'B Party',
+        'start time': 'Date & Time', 'type': 'Call Type',
+        'direction': 'Direction', 'duration': 'Duration',
+        'location': 'Location', 'cell id': 'Cell ID',
+        'latitude': 'Latitude', 'longitude': 'Longitude',
+        'imei': 'IMEI', 'imsi': 'IMSI',
+    }
+    headers = [rename_map.get(h.lower().strip(), h) for h in raw_hdrs]
 
-    # After deletion, remaining columns (original indices → new):
-    # A(0)→0, C(2)→1, D(3)→2, E(4)→3, H(7)→4, I(8)→5, J(9)→6, K(10)→7
-    # Move original-A (now idx 0) to last, original-K (now idx 7) to idx 1(C position)
-    # Simplified: rearrange so the key columns are in logical order
-    n = df.shape[1]
-    if n >= 8:
-        # Put col 7 (was K) at position 2, col 0 (was A) at position 6
-        order = [1, 2, 7, 3, 4, 5, 6, 0] + list(range(8, n))
-        df = df.iloc[:, order[:n]].copy()
-        df.columns = range(df.shape[1])
-
-    # Combine what are now cols 5 & 4 (date + time) into a new Call Type col
-    # (mirrors: Range("C:C").Formula = "=G2 & " " & F2")
-    if df.shape[1] >= 6:
-        df.insert(2, 'combined', df.iloc[:, 5].astype(str) + ' ' + df.iloc[:, 4].astype(str))
-        df.columns = range(df.shape[1])
-
-    # Drop the now-redundant original time columns
-    if df.shape[1] >= 8:
-        df = df.drop(columns=[df.columns[6], df.columns[7]]).copy()
-        df.columns = range(df.shape[1])
-
-    # Headers
-    n = df.shape[1]
-    headers = [f'Col{i}' for i in range(n)]
-    names = ['A Party', 'B Party', 'Call Type', 'Duration', 'Date & Time']
-    for i, name in enumerate(names):
-        if i < n:
-            headers[i] = name
-
-    # Skip header row 0 and use data rows
     data = df.iloc[1:].copy()
     data.columns = headers[:data.shape[1]]
     data = data.reset_index(drop=True)
 
-    # Fill blanks with "---"
-    data = data.fillna('---').replace('nan', '---').replace('', '---')
+    if 'B Party' in data.columns and sub_num:
+        data['B Party'] = data['B Party'].replace(sub_num, '')
 
-    # Strip prefixes from B Party
+    data = data.fillna('---')
+    for col in data.columns:
+        data[col] = data[col].apply(lambda x: '---' if clean(str(x)) == '' else clean(str(x)))
+
     if 'B Party' in data.columns:
         data['B Party'] = data['B Party'].apply(
-            lambda x: strip_prefix(x, 'ufone') if x != '---' else x
-        )
+            lambda x: strip_prefix(x, 'ufone') if x != '---' else x)
 
-    # Sort by Date & Time
     if 'Date & Time' in data.columns:
-        try:
-            data = data.sort_values('Date & Time').reset_index(drop=True)
-        except Exception:
-            pass
+        try: data = data.sort_values('Date & Time').reset_index(drop=True)
+        except: pass
 
-    info_rows = pd.DataFrame([
-        ['Number', sub_num, ''],
-        ['Name', '', ''],
-        ['CNIC', '', '']
-    ])
+    keep = ['A Party','B Party','Call Type','Direction','Date & Time',
+            'Duration','Cell ID','IMEI','IMSI','Location','Latitude','Longitude']
+    final_hdrs = [h for h in keep if h in data.columns]
+    return info_rows, final_hdrs, data[final_hdrs].reset_index(drop=True)
 
-    return info_rows, headers[:data.shape[1]], data
-
-# ────────────────────────────────────────────────────────────────────────────
-# JAZZ PROCESSOR
-# ────────────────────────────────────────────────────────────────────────────
+# ── JAZZ processor ────────────────────────────────────────────────────────────
 
 def process_jazz(df):
-    """
-    Raw layout: Row 0 = headers (AParty/BParty/CallType — no spaces).
-    B2 = subscriber number. Delete cols J:O. Prefixes: 640,92,38,2,40.
-    """
-    # Subscriber number from B2
     sub_num = clean(df.iloc[1, 1]) if df.shape[0] > 1 and df.shape[1] > 1 else ''
+    info_rows = pd.DataFrame([['Number', sub_num], ['Name', ''], ['CNIC', '']])
 
-    # Raw headers from row 0
     raw_hdrs = [clean(v) for v in df.iloc[0]]
+    rename_map = {
+        'calltype': 'Call Type', 'aparty': 'A Party', 'bparty': 'B Party',
+        'datetime': 'Date & Time', 'duration': 'Duration', 'cellid': 'Cell ID',
+        'imsi': 'IMSI', 'imei': 'IMEI', 'sitelocation': 'Location',
+    }
+    headers = [rename_map.get(h.lower().strip().replace(' ','').replace('_',''), h)
+               for h in raw_hdrs]
 
-    # Data rows (row 1 onwards)
-    data = df.iloc[1:].copy()
-    data.columns = raw_hdrs[:data.shape[1]]
+    max_col = min(9, df.shape[1])
+    data = df.iloc[1:, :max_col].copy()
+    data.columns = headers[:max_col]
     data = data.reset_index(drop=True)
 
-    # Drop columns J onwards (index 9+) — equivalent to deleting J:O
-    if data.shape[1] > 9:
-        data = data.iloc[:, :9].copy()
-
-    # Normalise header names (remove spaces / case differences)
-    rename = {}
-    for col in data.columns:
-        cl = col.lower().replace(' ', '').replace('_', '').replace('-', '')
-        if cl == 'aparty':         rename[col] = 'A Party'
-        elif cl == 'bparty':       rename[col] = 'B Party'
-        elif cl == 'calltype':     rename[col] = 'Call Type'
-        elif cl == 'datetime':     rename[col] = 'Date & Time'
-        elif cl == 'duration':     rename[col] = 'Duration'
-        elif cl in ('cellid','cell'): rename[col] = 'Cell ID'
-        elif cl == 'imsi':         rename[col] = 'IMSI'
-        elif cl == 'imei':         rename[col] = 'IMEI'
-        elif cl == 'location':     rename[col] = 'Location'
-    data = data.rename(columns=rename)
-
-    # Force positional names for any still-unnamed key columns
-    cols = list(data.columns)
-    pos_map = {0: 'Call Type', 1: 'A Party', 2: 'B Party', 3: 'Date & Time', 4: 'Duration'}
-    for pos, name in pos_map.items():
-        if pos < len(cols) and name not in cols:
-            cols[pos] = name
-    data.columns = cols
-
-    # Strip prefixes from B Party
     if 'B Party' in data.columns:
         data['B Party'] = data['B Party'].apply(lambda x: strip_prefix(x, 'jazz'))
 
-    headers = list(data.columns)
-    info_rows = pd.DataFrame([
-        ['Number', sub_num, ''],
-        ['Name', '', ''],
-        ['CNIC', '', '']
-    ])
+    return info_rows, list(data.columns), data.reset_index(drop=True)
 
-    return info_rows, headers, data
-
-# ────────────────────────────────────────────────────────────────────────────
-# TELENOR PROCESSOR
-# ────────────────────────────────────────────────────────────────────────────
+# ── TELENOR processor ─────────────────────────────────────────────────────────
 
 def process_telenor(df):
-    """
-    Raw layout: 13+ columns. A2 = subscriber number.
-    VBA: sort by col F, replace own number in B:C, copy C→B(skipblanks),
-         delete C, combine G+N for Call Type, build Location from N:S.
-    """
-    # Subscriber number from A2
     sub_num = clean(df.iloc[1, 0]) if df.shape[0] > 1 else ''
+    info_rows = pd.DataFrame([['Number', sub_num], ['Name', ''], ['CNIC', '']])
 
-    # Sort by column F (index 5)
-    if df.shape[1] > 5:
-        try:
-            df = df.sort_values(by=df.columns[5]).reset_index(drop=True)
-        except Exception:
-            pass
-
-    # Replace subscriber number in cols B(1) and C(2) with empty string
-    for ci in [1, 2]:
-        if ci < df.shape[1] and sub_num:
-            df.iloc[:, ci] = df.iloc[:, ci].replace(sub_num, '')
-
-    # Copy col C(2) to col B(1) where B is blank, then delete C
-    if df.shape[1] > 2:
-        b_blank = df.iloc[:, 1].apply(lambda v: clean(v) == '')
-        df.iloc[b_blank, 1] = df.iloc[b_blank, 2]
-        df = df.drop(columns=df.columns[2]).copy()
-        df.columns = range(df.shape[1])
-
-    # Combine col G(now ~5) & col N(now ~11) → Call Type (mirrors VBA: =G2 & " " & N2)
-    # After C deletion: A=0,B=1,D=2,E=3,F=4,G=5,H=6,I=7,J=8,K=9,L=10,M=11,N=12,...
-    g_idx, n_idx = 5, 11
-    if df.shape[1] > n_idx:
-        call_type = (df.iloc[:, g_idx].astype(str) + ' ' + df.iloc[:, n_idx].astype(str)).str.strip()
-        df.insert(g_idx, 'CallTypeCombined', call_type)
-        df.columns = range(df.shape[1])
-        # Delete original G (now g_idx+1) and original N (now n_idx+2 after insert)
-        drop_g = g_idx + 1
-        drop_n = n_idx + 2
-        drop_cols = sorted([i for i in [drop_g, drop_n] if i < df.shape[1]], reverse=True)
-        df = df.drop(columns=[df.columns[i] for i in drop_cols]).copy()
-        df.columns = range(df.shape[1])
-
-    # Build Location by combining remaining high-index columns (original N:S)
-    # After all operations, location parts start around index 11
-    loc_start = 11
-    if df.shape[1] > loc_start:
-        loc_parts = [df.iloc[:, i].fillna('').astype(str).replace('nan','')
-                     for i in range(loc_start, min(df.shape[1], loc_start + 7))]
-        location_col = loc_parts[0]
-        for part in loc_parts[1:]:
-            location_col = location_col + ' ' + part
-        location_col = location_col.str.strip()
-        # Keep only columns up to loc_start, then append location
-        df = df.iloc[:, :loc_start].copy()
-        df.columns = range(df.shape[1])
-        df['Location'] = location_col.values
-
-    # Assign headers
-    n = df.shape[1]
-    headers = [f'Col{i}' for i in range(n)]
-    pos_map = {
-        0: 'A Party',
-        1: 'B Party',
-        4: 'Date & Time',
-        5: 'Call Type',
-        6: 'Duration',
-    }
-    if 'Location' in df.columns:
-        pos_map[n - 1] = 'Location'
-    for pos, name in pos_map.items():
-        if pos < n:
-            headers[pos] = name
-
-    # Insert 4 info rows at top, use row at index 0 as header row
-    # (skip raw header row 0 — VBA renames them all manually)
     data = df.iloc[1:].copy()
-    data.columns = headers[:data.shape[1]]
+    data.columns = [clean(v) for v in df.iloc[0]]
     data = data.reset_index(drop=True)
 
-    # Fill blanks with "---"
-    data = data.fillna('---').replace('nan', '---').replace('', '---')
+    start_col = next((c for c in data.columns if 'start' in c.lower()), None)
+    if start_col:
+        try: data = data.sort_values(start_col).reset_index(drop=True)
+        except: pass
 
-    # Strip prefixes from B Party
-    if 'B Party' in data.columns:
-        data['B Party'] = data['B Party'].apply(
-            lambda x: strip_prefix(x, 'telenor') if x != '---' else x
-        )
+    a_col   = next((c for c in data.columns if c.lower() == 'msisdn'), None)
+    b_col   = next((c for c in data.columns if 'call_org_num' in c.lower()), None)
+    b2_col  = next((c for c in data.columns if 'call_dialed_num' in c.lower()), None)
+    dt_col  = next((c for c in data.columns if 'start' in c.lower()), None)
+    dir_col = next((c for c in data.columns if 'inbound_outbound' in c.lower()), None)
+    dur_col = next((c for c in data.columns if 'network_volume' in c.lower()), None)
+    ct_col  = next((c for c in data.columns if c.lower() == 'call_type'), None)
+    loc_col = next((c for c in data.columns if c.lower() == 'location'), None)
+    lac_col = next((c for c in data.columns if 'lac' in c.lower()), None)
+    site_col= next((c for c in data.columns if 'site_id' in c.lower()), None)
 
-    info_rows = pd.DataFrame([
-        ['Number', sub_num, ''],
-        ['Name', '', ''],
-        ['CNIC', '', '']
-    ])
+    if b_col and sub_num:
+        data[b_col] = data[b_col].replace(sub_num, '')
+    if b_col and b2_col:
+        mask = data[b_col].apply(lambda x: clean(str(x)) == '')
+        data.loc[mask, b_col] = data.loc[mask, b2_col]
 
-    return info_rows, headers[:data.shape[1]], data
+    if dir_col and ct_col:
+        data['Call Type'] = (data[dir_col].apply(clean)+' '+data[ct_col].apply(clean)).str.strip()
+    elif ct_col:
+        data['Call Type'] = data[ct_col]
+    else:
+        data['Call Type'] = ''
 
-# ────────────────────────────────────────────────────────────────────────────
-# SHEET BUILDERS
-# ────────────────────────────────────────────────────────────────────────────
+    out = pd.DataFrame()
+    if a_col:   out['A Party']     = data[a_col].apply(clean)
+    if b_col:   out['B Party']     = data[b_col].apply(clean)
+    if dt_col:  out['Date & Time'] = data[dt_col].apply(clean)
+    out['Call Type'] = data['Call Type']
+    if dur_col: out['Duration']    = data[dur_col].apply(clean)
+    if lac_col: out['LAC']         = data[lac_col].apply(clean)
+    if site_col:out['Site ID']     = data[site_col].apply(clean)
+    if loc_col: out['Location']    = data[loc_col].apply(clean)
+
+    out = out.fillna('---')
+    for col in out.columns:
+        out[col] = out[col].apply(lambda x: '---' if clean(str(x)) == '' else clean(str(x)))
+
+    if 'B Party' in out.columns:
+        out['B Party'] = out['B Party'].apply(
+            lambda x: strip_prefix(x, 'telenor') if x != '---' else x)
+
+    return info_rows, list(out.columns), out.reset_index(drop=True)
+
+# ── Sheet builders ────────────────────────────────────────────────────────────
 
 def build_cdr_sheet(ws, info_rows, headers, data_df, network):
-    bold14  = Font(size=14, bold=True)
-    bold    = Font(bold=True)
-    normal  = Font()
+    bold14   = Font(size=14, bold=True)
+    bold     = Font(bold=True)
     hdr_fill = PatternFill(fill_type='solid', fgColor='D9D9D9')
-    net_color = NETWORK_COLORS.get(network, 'D62B2B').replace('#', '')
-    info_fill = PatternFill(fill_type='solid', fgColor='FFF2CC')
+    inf_fill = PatternFill(fill_type='solid', fgColor='FFF2CC')
 
-    # ── Info header block (rows 1-3) ──────────────────────────────────────
-    labels = ['Number', 'Name', 'CNIC']
+    labels = ['Number','Name','CNIC']
     for ri, label in enumerate(labels, start=1):
         c = ws.cell(row=ri, column=1, value=label)
-        c.font = bold14
-        c.border = thin_border()
-        c.fill = info_fill
-
+        c.font=bold14; c.border=thin_border(); c.fill=inf_fill
         ws.merge_cells(f'B{ri}:C{ri}')
-        val = ''
-        if ri - 1 < len(info_rows):
-            raw = info_rows.iloc[ri - 1, 1] if info_rows.shape[1] > 1 else ''
-            val = clean(raw)
+        val = clean(info_rows.iloc[ri-1,1]) if ri-1 < len(info_rows) and info_rows.shape[1]>1 else ''
         vc = ws.cell(row=ri, column=2, value=val)
-        vc.font = bold14
-        vc.border = thin_border()
+        vc.font=bold14; vc.border=thin_border()
 
-    # ── Column headers (row 5) ────────────────────────────────────────────
     for ci, hdr in enumerate(headers, start=1):
         c = ws.cell(row=5, column=ci, value=hdr)
-        c.font = bold
-        c.border = thin_border()
-        c.fill = hdr_fill
+        c.font=bold; c.border=thin_border(); c.fill=hdr_fill
 
-    # ── Data rows (row 6 onwards) ─────────────────────────────────────────
     for ri, row_data in data_df.iterrows():
-        excel_row = ri + 6
+        er = ri + 6
         for ci, val in enumerate(row_data, start=1):
-            c = ws.cell(row=excel_row, column=ci, value=clean(val) or val)
-            c.font = normal
-            c.border = thin_border()
+            c = ws.cell(row=er, column=ci, value=clean(val) if pd.notna(val) else '')
+            c.border=thin_border()
 
     autofit_columns(ws)
-
-    # ── Page setup ────────────────────────────────────────────────────────
-    ws.page_setup.orientation = 'landscape'
-    ws.page_setup.paperSize   = 5      # Legal
-    ws.page_setup.scale       = 70
-    ws.print_title_rows       = '5:5'
-    ws.page_margins.top       = 0.41
-    ws.page_margins.right     = 0.25
-    ws.page_margins.bottom    = 0.38
-    ws.page_margins.left      = 1.14
-
+    ws.page_setup.orientation='landscape'; ws.page_setup.paperSize=5
+    ws.page_setup.scale=70; ws.print_title_rows='5:5'
+    ws.page_margins.top=0.41; ws.page_margins.right=0.25
+    ws.page_margins.bottom=0.38; ws.page_margins.left=1.14
 
 def build_summary_sheet(ws, data_df, network):
-    bold      = Font(bold=True)
-    hdr_fill  = PatternFill(fill_type='solid', fgColor='D9D9D9')
-    white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
+    bold     = Font(bold=True)
+    hdr_fill = PatternFill(fill_type='solid', fgColor='D9D9D9')
+    wht_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
 
-    # Find Call Type column (name varies per network)
-    ct_col = None
-    for col in data_df.columns:
-        if col.replace(' ', '').replace('_', '').lower() == 'calltype':
-            ct_col = col
-            break
+    a_col  = next((c for c in data_df.columns if 'a party' in c.lower()), None)
+    b_col  = next((c for c in data_df.columns if 'b party' in c.lower()), None)
+    ct_col = next((c for c in data_df.columns if 'call type' in c.lower().replace('_',' ')), None)
 
-    a_col = next((c for c in data_df.columns if 'a party' in c.lower()), None)
-    b_col = next((c for c in data_df.columns if 'b party' in c.lower()), None)
+    if not all([a_col, b_col, ct_col]):
+        ws.cell(row=3,column=1,value='Summary unavailable — missing columns'); return
 
-    if not all([ct_col, a_col, b_col]):
-        ws.cell(row=3, column=1,
-                value='Summary unavailable — A Party / B Party / Call Type columns not found')
-        return
-
-    # Filter out service numbers
     svc = SERVICE_NUMBERS.get(network, set())
     df  = data_df[~data_df[b_col].astype(str).isin(svc)].copy()
-    df  = df[df[b_col].astype(str).str.strip().ne('')].copy()
-    df  = df[df[b_col].astype(str).str.strip().ne('---')].copy()
+    df  = df[~df[b_col].astype(str).str.strip().isin(['','---'])].copy()
 
-    # Pivot: count of each call type grouped by A Party + B Party
     call_types = sorted(df[ct_col].dropna().unique())
-
     try:
-        pivot = (
-            df.groupby([a_col, b_col])[ct_col]
-            .value_counts()
-            .unstack(fill_value=0)
-        )
+        pivot = df.groupby([a_col,b_col])[ct_col].value_counts().unstack(fill_value=0)
         for ct in call_types:
-            if ct not in pivot.columns:
-                pivot[ct] = 0
+            if ct not in pivot.columns: pivot[ct] = 0
         pivot = pivot[call_types]
         pivot['Grand Total'] = pivot.sum(axis=1)
         pivot = pivot.sort_values('Grand Total', ascending=False).reset_index()
     except Exception as e:
-        ws.cell(row=3, column=1, value=f'Summary error: {e}')
-        return
+        ws.cell(row=3,column=1,value=f'Summary error: {e}'); return
 
-    # Write headers at row 3
     col_headers = [a_col, b_col] + call_types + ['Grand Total']
     for ci, hdr in enumerate(col_headers, start=1):
-        c = ws.cell(row=3, column=ci, value=hdr)
-        c.font = bold
-        c.border = thin_border()
-        c.fill = hdr_fill
+        c = ws.cell(row=3,column=ci,value=hdr)
+        c.font=bold; c.border=thin_border(); c.fill=hdr_fill
 
-    # Write data from row 4
     for ri, row_data in pivot.iterrows():
         er = ri + 4
         for ci, val in enumerate(row_data, start=1):
-            c = ws.cell(row=er, column=ci, value=val)
-            c.border = thin_border()
-            c.fill = white_fill
+            c = ws.cell(row=er,column=ci,value=val)
+            c.border=thin_border(); c.fill=wht_fill
 
-    # A-party numbers joined (equivalent to the "combine text" section in VBA)
     if a_col in pivot.columns:
         a_parties = ', '.join(
             str(v) for v in pivot[a_col].unique()
-            if str(v).strip() not in ('', 'Grand Total', 'nan')
-        )
+            if str(v).strip() not in ('','Grand Total','nan'))
         ws.cell(row=2, column=len(col_headers), value=a_parties)
 
     autofit_columns(ws)
-    ws.page_setup.scale       = 70
-    ws.page_margins.top       = 0.41
-    ws.page_margins.right     = 0.25
-    ws.page_margins.bottom    = 0.38
-    ws.page_margins.left      = 1.14
-
+    ws.page_setup.scale=70
+    ws.page_margins.top=0.41; ws.page_margins.right=0.25
+    ws.page_margins.bottom=0.38; ws.page_margins.left=1.14
 
 def build_i2_sheet(ws, headers, data_df, network):
-    """
-    I2 sheet: same as CDR data but strips first 2 chars from A Party (Telenor/Ufone)
-    or B Party (Zong/Jazz).
-    """
     bold     = Font(bold=True)
     hdr_fill = PatternFill(fill_type='solid', fgColor='D9D9D9')
+    strip_col = 'B Party' if network in ('zong','jazz') else 'A Party'
 
-    strip_col = 'B Party' if network in ('zong', 'jazz') else 'A Party'
-
-    # Headers at row 1
     for ci, hdr in enumerate(headers, start=1):
-        c = ws.cell(row=1, column=ci, value=hdr)
-        c.font = bold
-        c.border = thin_border()
-        c.fill = hdr_fill
+        c = ws.cell(row=1,column=ci,value=hdr)
+        c.font=bold; c.border=thin_border(); c.fill=hdr_fill
 
-    # Data from row 2
     for ri, row_data in data_df.iterrows():
         er = ri + 2
         for ci, (col_name, val) in enumerate(row_data.items(), start=1):
-            s = clean(val) or str(val)
+            s = clean(val) if pd.notna(val) else ''
             if col_name == strip_col and len(s) > 2:
                 s = s[2:]
-            c = ws.cell(row=er, column=ci, value=s)
-            c.border = thin_border()
+            c = ws.cell(row=er,column=ci,value=s)
+            c.border=thin_border()
 
     autofit_columns(ws)
 
-# ────────────────────────────────────────────────────────────────────────────
-# MAIN ASSEMBLY
-# ────────────────────────────────────────────────────────────────────────────
-
 def create_output_excel(info_rows, headers, data_df, network):
     wb = Workbook()
-    ws_cdr     = wb.active
-    ws_cdr.title = 'CDR'
+    ws_cdr     = wb.active; ws_cdr.title='CDR'
     ws_summary = wb.create_sheet('Summary')
     ws_i2      = wb.create_sheet('I2')
-
     build_cdr_sheet(ws_cdr, info_rows, headers, data_df, network)
     build_summary_sheet(ws_summary, data_df, network)
     build_i2_sheet(ws_i2, headers, data_df, network)
-
     out = io.BytesIO()
-    wb.save(out)
-    out.seek(0)
+    wb.save(out); out.seek(0)
     return out
 
-# ────────────────────────────────────────────────────────────────────────────
-# FLASK ROUTES
-# ────────────────────────────────────────────────────────────────────────────
+# ── Flask routes ──────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/detect', methods=['POST'])
-def detect():
-    """Quick detection endpoint — returns network name before full processing."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file'}), 400
-    file = request.files['file']
-    try:
-        df  = read_file(file.read(), file.filename)
-        net = detect_network(df)
-        return jsonify({
-            'network': net,
-            'name':    NETWORK_NAMES[net],
-            'color':   NETWORK_COLORS[net]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/process', methods=['POST'])
 def process():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+        return jsonify({'error':'No file uploaded'}), 400
+    file    = request.files['file']
+    network = request.form.get('network','').lower()
 
-    file = request.files['file']
     if not file.filename:
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error':'No file selected'}), 400
+    if network not in ('zong','ufone','jazz','telenor'):
+        return jsonify({'error':'Please select a network'}), 400
 
-    ext = file.filename.rsplit('.', 1)[-1].lower()
-    if ext not in {'xlsx', 'xls', 'csv'}:
-        return jsonify({'error': f'.{ext} is not supported'}), 400
+    ext = file.filename.rsplit('.',1)[-1].lower()
+    if ext not in {'xlsx','xls','csv'}:
+        return jsonify({'error':f'.{ext} not supported'}), 400
 
     try:
-        raw       = file.read()
-        df_raw    = read_file(raw, file.filename)
-        network   = detect_network(df_raw)
-
+        raw    = file.read()
+        df_raw = read_file(raw, file.filename)
         processors = {
-            'zong':    process_zong,
-            'ufone':   process_ufone,
-            'jazz':    process_jazz,
-            'telenor': process_telenor,
+            'zong':process_zong,'ufone':process_ufone,
+            'jazz':process_jazz,'telenor':process_telenor
         }
         info_rows, headers, data_df = processors[network](df_raw)
-
-        output     = create_output_excel(info_rows, headers, data_df, network)
-        out_name   = file.filename.rsplit('.', 1)[0] + f'_{NETWORK_NAMES[network]}_CDR_Processed.xlsx'
-
-        return send_file(
-            output,
+        output   = create_output_excel(info_rows, headers, data_df, network)
+        out_name = file.filename.rsplit('.',1)[0] + f'_{NETWORK_NAMES[network]}_Processed.xlsx'
+        return send_file(output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=out_name
-        )
+            as_attachment=True, download_name=out_name)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error':str(e)}), 500
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
