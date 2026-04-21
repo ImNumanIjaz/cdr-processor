@@ -3,124 +3,160 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CDR Processor — All Networks</title>
+  <title>CDR Processor</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Arial,sans-serif;background:#f0f2f5;min-height:100vh;
-         display:flex;align-items:center;justify-content:center;padding:20px}
-    .card{background:#fff;border-radius:16px;padding:32px 24px;width:100%;
-          max-width:500px;box-shadow:0 4px 24px rgba(0,0,0,.10)}
-    h1{text-align:center;font-size:21px;color:#1a1a1a;margin-bottom:4px}
-    .sub{text-align:center;font-size:13px;color:#888;margin-bottom:24px}
+         display:flex;align-items:center;justify-content:center;padding:16px}
+    .card{background:#fff;border-radius:16px;padding:28px 22px;width:100%;max-width:460px;
+          box-shadow:0 4px 24px rgba(0,0,0,.10)}
+    h1{text-align:center;font-size:20px;color:#1a1a1a;margin-bottom:4px}
+    .sub{text-align:center;font-size:13px;color:#888;margin-bottom:22px}
 
-    /* Network badges */
-    .networks{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:22px}
-    .nb{font-size:12px;font-weight:bold;padding:4px 12px;border-radius:20px;color:#fff}
-    .nb.zong{background:#d62b2b}
-    .nb.ufone{background:#00a651}
-    .nb.jazz{background:#f7941d}
-    .nb.telenor{background:#0073c2}
+    /* Network selector buttons */
+    .net-label{font-size:13px;font-weight:bold;color:#444;margin-bottom:8px}
+    .net-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+    .net-btn{padding:12px 8px;border:2px solid #ddd;border-radius:10px;
+             background:#fff;cursor:pointer;font-size:14px;font-weight:bold;
+             color:#666;transition:all .2s;text-align:center}
+    .net-btn:hover{border-color:#aaa;color:#333}
+    .net-btn.selected{color:#fff;border-color:transparent}
+    .net-btn.zong.selected{background:#d62b2b}
+    .net-btn.ufone.selected{background:#00a651}
+    .net-btn.jazz.selected{background:#f7941d}
+    .net-btn.telenor.selected{background:#0073c2}
+    .net-btn .dot{width:10px;height:10px;border-radius:50%;display:inline-block;
+                  margin-right:6px;vertical-align:middle}
+    .dot-z{background:#d62b2b} .dot-u{background:#00a651}
+    .dot-j{background:#f7941d} .dot-t{background:#0073c2}
+    .net-btn.selected .dot{background:rgba(255,255,255,0.7)}
 
     /* Drop zone */
-    .drop-zone{border:2px dashed #ccc;border-radius:12px;padding:28px 16px;
-               text-align:center;cursor:pointer;transition:all .2s;background:#fafafa}
-    .drop-zone:hover,.drop-zone.dragover{border-color:#555;background:#f0f0f0}
+    .drop-zone{border:2px dashed #ddd;border-radius:12px;padding:24px 16px;
+               text-align:center;cursor:pointer;transition:all .2s;background:#fafafa;
+               margin-bottom:16px}
+    .drop-zone:hover,.drop-zone.dragover{border-color:#aaa;background:#f3f3f3}
     .drop-zone input{display:none}
-    .drop-icon{font-size:32px;margin-bottom:8px}
-    .drop-text{font-size:15px;color:#444;margin-bottom:4px}
-    .drop-hint{font-size:12px;color:#aaa}
-    .file-name{margin-top:10px;font-size:13px;font-weight:bold;color:#333;min-height:18px}
+    .drop-icon{font-size:30px;margin-bottom:8px}
+    .drop-text{font-size:14px;color:#444;margin-bottom:3px}
+    .drop-hint{font-size:12px;color:#bbb}
+    .file-name{margin-top:8px;font-size:13px;font-weight:bold;color:#333;
+               min-height:18px;word-break:break-all}
 
-    /* Detected network banner */
-    .net-banner{display:none;margin-top:14px;padding:10px 14px;border-radius:8px;
-                font-size:14px;font-weight:bold;color:#fff;text-align:center;
-                transition:background .3s}
-
-    /* Button */
-    .btn{display:block;width:100%;margin-top:16px;padding:13px;border:none;
-         border-radius:10px;font-size:16px;font-weight:bold;color:#fff;
-         cursor:pointer;transition:opacity .2s;background:#333}
+    /* Process button */
+    .btn{display:block;width:100%;padding:13px;border:none;border-radius:10px;
+         font-size:16px;font-weight:bold;color:#fff;cursor:pointer;
+         transition:all .2s;background:#ccc}
+    .btn.ready{background:#333}
+    .btn.zong-btn{background:#d62b2b}
+    .btn.ufone-btn{background:#00a651}
+    .btn.jazz-btn{background:#f7941d}
+    .btn.telenor-btn{background:#0073c2}
     .btn:disabled{opacity:.45;cursor:not-allowed}
 
     /* Status */
     .status{margin-top:14px;padding:11px 14px;border-radius:8px;
-            font-size:13px;display:none}
+            font-size:13px;display:none;line-height:1.5}
     .status.loading{background:#fff3cd;color:#856404;display:block}
     .status.success{background:#d1fae5;color:#065f46;display:block}
     .status.error{background:#fee2e2;color:#991b1b;display:block}
-
-    /* Spinner */
     .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;
           border-top-color:transparent;border-radius:50%;
           animation:spin .7s linear infinite;margin-right:6px;vertical-align:middle}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Info list */
-    .info-list{margin-top:22px;padding-top:18px;border-top:1px solid #eee}
-    .info-item{display:flex;gap:9px;margin-bottom:9px;font-size:13px;color:#555}
-    .dot{width:7px;height:7px;border-radius:50%;background:#999;
-         flex-shrink:0;margin-top:5px}
+    .divider{border:none;border-top:1px solid #eee;margin:18px 0}
+    .info-item{display:flex;gap:8px;margin-bottom:7px;font-size:12px;color:#777}
+    .dot-sm{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}
   </style>
 </head>
 <body>
 <div class="card">
   <h1>CDR Processor</h1>
-  <p class="sub">Upload any CDR file — network detected automatically</p>
+  <p class="sub">Select network, upload file, download processed Excel</p>
 
-  <!-- Network badges -->
-  <div class="networks">
-    <span class="nb zong">Zong</span>
-    <span class="nb ufone">Ufone</span>
-    <span class="nb jazz">Jazz</span>
-    <span class="nb telenor">Telenor</span>
+  <!-- Step 1: Network selection -->
+  <div class="net-label">Step 1 — Select Network</div>
+  <div class="net-grid">
+    <button class="net-btn zong" onclick="selectNetwork('zong', this)">
+      <span class="dot dot-z"></span>Zong
+    </button>
+    <button class="net-btn ufone" onclick="selectNetwork('ufone', this)">
+      <span class="dot dot-u"></span>Ufone
+    </button>
+    <button class="net-btn jazz" onclick="selectNetwork('jazz', this)">
+      <span class="dot dot-j"></span>Jazz
+    </button>
+    <button class="net-btn telenor" onclick="selectNetwork('telenor', this)">
+      <span class="dot dot-t"></span>Telenor
+    </button>
   </div>
 
-  <!-- Upload area -->
+  <!-- Step 2: File upload -->
+  <div class="net-label">Step 2 — Upload CDR File</div>
   <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
     <div class="drop-icon">📂</div>
-    <div class="drop-text">Tap to select CDR file</div>
-    <div class="drop-hint">Supports .xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv</div>
+    <div class="drop-text">Tap to select file</div>
+    <div class="drop-hint">.xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv</div>
     <div class="file-name" id="fileName"></div>
     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
   </div>
 
-  <!-- Auto-detected network banner -->
-  <div class="net-banner" id="netBanner"></div>
-
+  <!-- Step 3: Process -->
   <button class="btn" id="processBtn" onclick="uploadFile()" disabled>
-    Process CDR File
+    Select Network &amp; File First
   </button>
 
   <div class="status" id="status"></div>
 
-  <div class="info-list">
-    <div class="info-item"><div class="dot" style="background:#d62b2b"></div>
-      <span><strong>Zong</strong> — strips prefixes 110, 92, 38</span></div>
-    <div class="info-item"><div class="dot" style="background:#00a651"></div>
-      <span><strong>Ufone</strong> — strips prefixes 9292, 92 + hex codes</span></div>
-    <div class="info-item"><div class="dot" style="background:#f7941d"></div>
-      <span><strong>Jazz</strong> — strips prefixes 640, 92, 38, 2, 40</span></div>
-    <div class="info-item"><div class="dot" style="background:#0073c2"></div>
-      <span><strong>Telenor</strong> — strips prefixes 9292, 92</span></div>
-    <div class="info-item"><div class="dot"></div>
-      <span>Output: 3 sheets — CDR, Summary, I2</span></div>
+  <hr class="divider"/>
+
+  <div class="info-item">
+    <div class="dot-sm" style="background:#d62b2b"></div>
+    <span><b>Zong</b> — strips prefixes 110, 92, 38</span>
+  </div>
+  <div class="info-item">
+    <div class="dot-sm" style="background:#00a651"></div>
+    <span><b>Ufone</b> — strips prefixes 9292, 92</span>
+  </div>
+  <div class="info-item">
+    <div class="dot-sm" style="background:#f7941d"></div>
+    <span><b>Jazz</b> — strips prefixes 640, 92, 38, 2, 40</span>
+  </div>
+  <div class="info-item">
+    <div class="dot-sm" style="background:#0073c2"></div>
+    <span><b>Telenor</b> — strips prefixes 9292, 92</span>
+  </div>
+  <div class="info-item">
+    <div class="dot-sm" style="background:#999"></div>
+    <span>Output: 3 sheets — CDR, Summary, I2</span>
   </div>
 </div>
 
 <script>
+  let selectedNetwork = '';
+  let selectedFile    = null;
+
   const fileInput  = document.getElementById('fileInput');
   const fileName   = document.getElementById('fileName');
   const processBtn = document.getElementById('processBtn');
   const status     = document.getElementById('status');
   const dropZone   = document.getElementById('dropZone');
-  const netBanner  = document.getElementById('netBanner');
 
-  let selectedFile = null;
+  function selectNetwork(net, btn) {
+    // Remove selected from all buttons
+    document.querySelectorAll('.net-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedNetwork = net;
+    updateButton();
+  }
 
   fileInput.addEventListener('change', () => {
     if (fileInput.files.length > 0) {
       selectedFile = fileInput.files[0];
-      onFileSelected(selectedFile);
+      fileName.textContent = selectedFile.name;
+      clearStatus();
+      updateButton();
     }
   });
 
@@ -132,31 +168,28 @@
     e.preventDefault(); dropZone.classList.remove('dragover');
     if (e.dataTransfer.files.length > 0) {
       selectedFile = e.dataTransfer.files[0];
-      onFileSelected(selectedFile);
+      fileName.textContent = selectedFile.name;
+      clearStatus(); updateButton();
     }
   });
 
-  async function onFileSelected(file) {
-    fileName.textContent = file.name;
-    clearStatus();
-    netBanner.style.display = 'none';
-    processBtn.disabled = true;
-
-    // Auto-detect network immediately on file select
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const res  = await fetch('/detect', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.network) {
-        netBanner.textContent    = '✓ Detected: ' + data.name + ' CDR';
-        netBanner.style.background = data.color;
-        netBanner.style.display  = 'block';
-        processBtn.style.background = data.color;
-      }
-    } catch (_) {}
-
-    processBtn.disabled = false;
+  function updateButton() {
+    const ready = selectedNetwork && selectedFile;
+    processBtn.disabled = !ready;
+    // Reset classes
+    processBtn.className = 'btn';
+    if (!ready) {
+      if (!selectedNetwork && !selectedFile)
+        processBtn.textContent = 'Select Network & File First';
+      else if (!selectedNetwork)
+        processBtn.textContent = 'Select a Network First';
+      else
+        processBtn.textContent = 'Select a File First';
+      return;
+    }
+    const names = {zong:'Zong',ufone:'Ufone',jazz:'Jazz',telenor:'Telenor'};
+    processBtn.textContent = `Process ${names[selectedNetwork]} CDR`;
+    processBtn.classList.add(selectedNetwork + '-btn');
   }
 
   function clearStatus() {
@@ -168,15 +201,17 @@
   }
 
   async function uploadFile() {
-    if (!selectedFile) return;
+    if (!selectedFile || !selectedNetwork) return;
     processBtn.disabled = true;
-    showStatus('loading', '<span class="spin"></span>Processing your CDR file…');
+    const names = {zong:'Zong',ufone:'Ufone',jazz:'Jazz',telenor:'Telenor'};
+    showStatus('loading', `<span class="spin"></span>Processing ${names[selectedNetwork]} CDR file…`);
 
     const fd = new FormData();
     fd.append('file', selectedFile);
+    fd.append('network', selectedNetwork);
 
     try {
-      const res = await fetch('/process', { method: 'POST', body: fd });
+      const res = await fetch('/process', { method:'POST', body:fd });
       if (res.ok) {
         const blob = await res.blob();
         const url  = URL.createObjectURL(blob);
@@ -189,12 +224,12 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showStatus('success', '✅ Done! File downloaded successfully.');
+        showStatus('success', `✅ ${names[selectedNetwork]} CDR processed successfully! File downloaded.`);
       } else {
         const d = await res.json();
         showStatus('error', '❌ ' + (d.error || 'Something went wrong.'));
       }
-    } catch (e) {
+    } catch(e) {
       showStatus('error', '❌ Cannot connect to server. Check your internet.');
     } finally {
       processBtn.disabled = false;
