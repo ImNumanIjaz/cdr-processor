@@ -3,602 +3,516 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CDR Processor — Intelligence Tool</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<title>CDR Processor</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --bg:        #0a0c10;
-  --bg2:       #0f1218;
-  --bg3:       #151921;
-  --border:    rgba(255,255,255,0.07);
-  --border2:   rgba(255,255,255,0.12);
-  --text:      #e8eaf0;
-  --muted:     #5a6070;
-  --zong:      #e8314a;
-  --ufone:     #00c96e;
-  --jazz:      #ff9500;
-  --telenor:   #2196f3;
-  --glow-z:    rgba(232,49,74,0.3);
-  --glow-u:    rgba(0,201,110,0.3);
-  --glow-j:    rgba(255,149,0,0.3);
-  --glow-t:    rgba(33,150,243,0.3);
+  --bg:      #0a0c10;
+  --bg2:     #0f1218;
+  --bg3:     #141820;
+  --border:  rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text:    #e8eaf0;
+  --muted:   #4a5060;
+  --zong:    #7dc242;
+  --ufone:   #f47920;
+  --jazz:    #ffd700;
+  --telenor: #009ee0;
 }
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
 body {
-  font-family: 'Outfit', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  overflow-x: hidden;
+  font-family:'Outfit',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
 }
 
-/* Animated grid background */
+/* Grid bg */
 body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
+  content:'';
+  position:fixed;
+  inset:0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Subtle corner glow */
-body::after {
-  content: '';
-  position: fixed;
-  top: -200px; left: -200px;
-  width: 600px; height: 600px;
-  background: radial-gradient(circle, rgba(232,49,74,0.06) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-  animation: drift 8s ease-in-out infinite alternate;
-}
-
-@keyframes drift {
-  from { transform: translate(0,0); }
-  to   { transform: translate(60px, 40px); }
+    linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);
+  background-size:44px 44px;
+  pointer-events:none;
+  z-index:0;
 }
 
 .wrapper {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 500px;
-  animation: fadeUp 0.6s ease both;
+  position:relative;
+  z-index:1;
+  width:100%;
+  max-width:480px;
+  animation:fadeUp 0.55s ease both;
 }
 
 @keyframes fadeUp {
-  from { opacity:0; transform:translateY(24px); }
-  to   { opacity:1; transform:translateY(0); }
+  from{opacity:0;transform:translateY(20px)}
+  to  {opacity:1;transform:translateY(0)}
 }
 
-/* Header */
-.header {
-  text-align: center;
-  margin-bottom: 28px;
+/* ── Header ── */
+.header { text-align:center; margin-bottom:24px; }
+
+.badge {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  padding:5px 14px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-bottom:14px;
 }
 
-.header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border2);
-  border-radius: 20px;
-  padding: 5px 14px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 14px;
+.badge-dot {
+  width:6px;height:6px;
+  border-radius:50%;
+  background:#7dc242;
+  box-shadow:0 0 8px #7dc242;
+  animation:blink 2s ease-in-out infinite;
 }
-
-.header-badge::before {
-  content: '';
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--zong);
-  box-shadow: 0 0 8px var(--zong);
-  animation: blink 2s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%,100%{ opacity:1; } 50%{ opacity:0.3; }
-}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
 .header h1 {
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: #fff;
-  line-height: 1;
-  margin-bottom: 6px;
+  font-family:'Rajdhani',sans-serif;
+  font-size:38px;
+  font-weight:700;
+  letter-spacing:4px;
+  text-transform:uppercase;
+  color:#fff;
+  line-height:1;
+  margin-bottom:6px;
 }
-
-.header h1 span {
-  color: var(--zong);
-  transition: color 0.4s;
-}
-
+.header h1 span { transition:color 0.35s ease; }
 .header p {
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 300;
-  letter-spacing: 0.5px;
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:1px;
+  font-weight:300;
 }
 
-/* Main card */
+/* ── Card ── */
 .card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 28px;
-  position: relative;
-  overflow: hidden;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:26px;
+  position:relative;
+  overflow:hidden;
 }
-
 .card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);
 }
 
-/* Step labels */
+/* ── Step label ── */
 .step-label {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:12px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.step-num {
+  width:18px;height:18px;
+  border-radius:50%;
+  border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;
+  flex-shrink:0;
 }
 
-.step-label::before {
-  content: attr(data-step);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  border: 1px solid var(--border2);
-  font-size: 10px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.step-label.active::before {
-  border-color: currentColor;
-  color: #fff;
-}
-
-/* Network grid */
+/* ── Network grid ── */
 .net-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 24px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-bottom:22px;
 }
 
 .net-btn {
-  position: relative;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 12px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:16px 12px;
+  cursor:pointer;
+  transition:all 0.22s ease;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  position:relative;
+  overflow:hidden;
+}
+.net-btn:hover { transform:translateY(-2px); border-color:var(--border2); }
+
+.net-logo {
+  width:64px;height:40px;
+  display:flex;align-items:center;justify-content:center;
 }
 
-.net-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.25s;
+.net-label-row {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+}
+.net-title {
+  font-family:'Rajdhani',sans-serif;
+  font-size:15px;
+  font-weight:600;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  color:var(--text);
+  transition:color 0.22s;
+}
+.net-sub {
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  letter-spacing:0.5px;
 }
 
-.net-btn:hover { border-color: var(--border2); transform: translateY(-1px); }
-
-.net-btn .net-icon {
-  width: 36px; height: 36px;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  flex-shrink: 0;
-  transition: all 0.25s;
+.net-check {
+  position:absolute;
+  top:9px;right:9px;
+  width:16px;height:16px;
+  border-radius:50%;
+  border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;
+  color:transparent;
+  transition:all 0.2s;
 }
 
-.net-btn .net-info { flex: 1; text-align: left; }
-.net-btn .net-name {
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: var(--text);
-  display: block;
-  line-height: 1;
-  margin-bottom: 2px;
+/* ── Zong ── */
+.net-btn.zong:hover  { border-color:rgba(125,194,66,0.3); }
+.net-btn.zong.sel {
+  border-color:var(--zong);
+  background:rgba(125,194,66,0.07);
+  box-shadow:0 0 24px rgba(125,194,66,0.13),inset 0 0 20px rgba(125,194,66,0.05);
 }
-.net-btn .net-prefix {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 9px;
-  color: var(--muted);
-  letter-spacing: 0.5px;
-}
+.net-btn.zong.sel .net-check { background:var(--zong); border-color:var(--zong); color:#fff; }
+.net-btn.zong.sel .net-title { color:var(--zong); }
 
-.net-btn .net-check {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  border: 1px solid var(--border2);
-  flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s;
-  font-size: 10px;
-  color: transparent;
+/* ── Ufone ── */
+.net-btn.ufone:hover  { border-color:rgba(244,121,32,0.3); }
+.net-btn.ufone.sel {
+  border-color:var(--ufone);
+  background:rgba(244,121,32,0.07);
+  box-shadow:0 0 24px rgba(244,121,32,0.13),inset 0 0 20px rgba(244,121,32,0.05);
 }
+.net-btn.ufone.sel .net-check { background:var(--ufone); border-color:var(--ufone); color:#fff; }
+.net-btn.ufone.sel .net-title { color:var(--ufone); }
 
-/* Zong */
-.net-btn.zong .net-icon { background: rgba(232,49,74,0.12); color: var(--zong); }
-.net-btn.zong:hover { border-color: rgba(232,49,74,0.3); }
-.net-btn.zong.selected {
-  border-color: var(--zong);
-  background: rgba(232,49,74,0.07);
-  box-shadow: 0 0 20px rgba(232,49,74,0.12), inset 0 0 20px rgba(232,49,74,0.04);
+/* ── Jazz ── */
+.net-btn.jazz:hover  { border-color:rgba(255,215,0,0.3); }
+.net-btn.jazz.sel {
+  border-color:var(--jazz);
+  background:rgba(255,215,0,0.05);
+  box-shadow:0 0 24px rgba(255,215,0,0.1),inset 0 0 20px rgba(255,215,0,0.04);
 }
-.net-btn.zong.selected .net-icon { background: rgba(232,49,74,0.2); box-shadow: 0 0 12px rgba(232,49,74,0.3); }
-.net-btn.zong.selected .net-check { background: var(--zong); border-color: var(--zong); color: #fff; }
+.net-btn.jazz.sel .net-check { background:var(--jazz); border-color:var(--jazz); color:#1a1a1a; }
+.net-btn.jazz.sel .net-title { color:var(--jazz); }
 
-/* Ufone */
-.net-btn.ufone .net-icon { background: rgba(0,201,110,0.12); color: var(--ufone); }
-.net-btn.ufone:hover { border-color: rgba(0,201,110,0.3); }
-.net-btn.ufone.selected {
-  border-color: var(--ufone);
-  background: rgba(0,201,110,0.07);
-  box-shadow: 0 0 20px rgba(0,201,110,0.12), inset 0 0 20px rgba(0,201,110,0.04);
+/* ── Telenor ── */
+.net-btn.telenor:hover  { border-color:rgba(0,158,224,0.3); }
+.net-btn.telenor.sel {
+  border-color:var(--telenor);
+  background:rgba(0,158,224,0.07);
+  box-shadow:0 0 24px rgba(0,158,224,0.13),inset 0 0 20px rgba(0,158,224,0.05);
 }
-.net-btn.ufone.selected .net-icon { background: rgba(0,201,110,0.2); box-shadow: 0 0 12px rgba(0,201,110,0.3); }
-.net-btn.ufone.selected .net-check { background: var(--ufone); border-color: var(--ufone); color: #fff; }
+.net-btn.telenor.sel .net-check { background:var(--telenor); border-color:var(--telenor); color:#fff; }
+.net-btn.telenor.sel .net-title { color:var(--telenor); }
 
-/* Jazz */
-.net-btn.jazz .net-icon { background: rgba(255,149,0,0.12); color: var(--jazz); }
-.net-btn.jazz:hover { border-color: rgba(255,149,0,0.3); }
-.net-btn.jazz.selected {
-  border-color: var(--jazz);
-  background: rgba(255,149,0,0.07);
-  box-shadow: 0 0 20px rgba(255,149,0,0.12), inset 0 0 20px rgba(255,149,0,0.04);
-}
-.net-btn.jazz.selected .net-icon { background: rgba(255,149,0,0.2); box-shadow: 0 0 12px rgba(255,149,0,0.3); }
-.net-btn.jazz.selected .net-check { background: var(--jazz); border-color: var(--jazz); color: #fff; }
+hr.div { border:none; border-top:1px solid var(--border); margin:20px 0; }
 
-/* Telenor */
-.net-btn.telenor .net-icon { background: rgba(33,150,243,0.12); color: var(--telenor); }
-.net-btn.telenor:hover { border-color: rgba(33,150,243,0.3); }
-.net-btn.telenor.selected {
-  border-color: var(--telenor);
-  background: rgba(33,150,243,0.07);
-  box-shadow: 0 0 20px rgba(33,150,243,0.12), inset 0 0 20px rgba(33,150,243,0.04);
-}
-.net-btn.telenor.selected .net-icon { background: rgba(33,150,243,0.2); box-shadow: 0 0 12px rgba(33,150,243,0.3); }
-.net-btn.telenor.selected .net-check { background: var(--telenor); border-color: var(--telenor); color: #fff; }
-
-/* Divider */
-.divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 22px 0;
-}
-
-/* Drop zone */
+/* ── Drop zone ── */
 .drop-zone {
-  border: 1px dashed rgba(255,255,255,0.1);
-  border-radius: 12px;
-  padding: 28px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.25s;
-  background: var(--bg3);
-  margin-bottom: 20px;
-  position: relative;
-  overflow: hidden;
+  border:1px dashed rgba(255,255,255,0.1);
+  border-radius:12px;
+  padding:26px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.22s;
+  background:var(--bg3);
+  margin-bottom:18px;
 }
-
-.drop-zone:hover, .drop-zone.dragover {
-  border-color: rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.03);
+.drop-zone:hover,.drop-zone.over {
+  border-color:rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.025);
 }
+.drop-zone input{display:none}
 
-.drop-zone input { display: none; }
-
-.drop-icon-wrap {
-  width: 52px; height: 52px;
-  border-radius: 12px;
-  border: 1px solid var(--border2);
-  background: var(--bg2);
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 12px;
-  font-size: 22px;
-  transition: all 0.25s;
+.upload-icon {
+  width:48px;height:48px;
+  border-radius:12px;
+  border:1px solid var(--border2);
+  background:var(--bg2);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 12px;
+  font-size:20px;
+  transition:transform 0.22s;
 }
-
-.drop-zone:hover .drop-icon-wrap { transform: translateY(-2px); border-color: rgba(255,255,255,0.2); }
-
-.drop-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 4px;
+.drop-zone:hover .upload-icon { transform:translateY(-2px); }
+.drop-text { font-size:14px; font-weight:500; color:var(--text); margin-bottom:3px; }
+.drop-hint { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; }
+.file-tag {
+  display:none;
+  margin-top:12px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:11px;
+  color:#fff;
+  background:rgba(255,255,255,0.05);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:7px 12px;
+  word-break:break-all;
 }
+.file-tag.show { display:block; }
 
-.drop-hint {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  color: var(--muted);
-  letter-spacing: 1px;
+/* ── Process button ── */
+.proc-btn {
+  width:100%;
+  padding:15px;
+  border:1px solid var(--border2);
+  border-radius:12px;
+  font-family:'Rajdhani',sans-serif;
+  font-size:17px;
+  font-weight:700;
+  letter-spacing:2.5px;
+  text-transform:uppercase;
+  color:var(--muted);
+  background:rgba(255,255,255,0.03);
+  cursor:not-allowed;
+  transition:all 0.25s;
+  position:relative;
+  overflow:hidden;
 }
-
-.file-name {
-  margin-top: 12px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  color: #fff;
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px;
-  padding: 6px 10px;
-  display: none;
-  word-break: break-all;
-  border: 1px solid var(--border2);
+.proc-btn.go {
+  cursor:pointer;
+  color:#fff;
 }
+.proc-btn.go:hover { transform:translateY(-1px); }
+.proc-btn.go:active { transform:scale(0.99); }
 
-.file-name.visible { display: block; }
+.proc-btn.go-zong    { background:var(--zong);    border-color:var(--zong);    box-shadow:0 4px 28px rgba(125,194,66,0.35); color:#fff; }
+.proc-btn.go-ufone   { background:var(--ufone);   border-color:var(--ufone);   box-shadow:0 4px 28px rgba(244,121,32,0.35); color:#fff; }
+.proc-btn.go-jazz    { background:var(--jazz);    border-color:var(--jazz);    box-shadow:0 4px 28px rgba(255,215,0,0.25);  color:#1a1a1a; }
+.proc-btn.go-telenor { background:var(--telenor); border-color:var(--telenor); box-shadow:0 4px 28px rgba(0,158,224,0.35); color:#fff; }
 
-/* Process button */
-.process-btn {
-  width: 100%;
-  padding: 15px;
-  border: none;
-  border-radius: 12px;
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.25s;
-  position: relative;
-  overflow: hidden;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border2);
-  color: var(--muted);
+.proc-btn.go::after {
+  content:'';
+  position:absolute;
+  top:0;left:-100%;
+  width:55%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
+  animation:shim 2.8s ease-in-out infinite;
 }
+@keyframes shim { 0%{left:-100%} 60%,100%{left:160%} }
 
-.process-btn:not(:disabled):hover { transform: translateY(-1px); }
-.process-btn:not(:disabled):active { transform: translateY(0) scale(0.99); }
-.process-btn:disabled { cursor: not-allowed; }
-
-.process-btn.ready-zong    { background: var(--zong); border-color: var(--zong); color:#fff; box-shadow: 0 4px 24px rgba(232,49,74,0.35); }
-.process-btn.ready-ufone   { background: var(--ufone); border-color: var(--ufone); color:#fff; box-shadow: 0 4px 24px rgba(0,201,110,0.35); }
-.process-btn.ready-jazz    { background: var(--jazz); border-color: var(--jazz); color:#fff; box-shadow: 0 4px 24px rgba(255,149,0,0.35); }
-.process-btn.ready-telenor { background: var(--telenor); border-color: var(--telenor); color:#fff; box-shadow: 0 4px 24px rgba(33,150,243,0.35); }
-
-/* Shimmer on ready button */
-.process-btn.ready-zong::after,
-.process-btn.ready-ufone::after,
-.process-btn.ready-jazz::after,
-.process-btn.ready-telenor::after {
-  content: '';
-  position: absolute;
-  top: 0; left: -100%;
-  width: 60%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-  animation: shimmer 2.5s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0%   { left: -100%; }
-  60%,100% { left: 160%; }
-}
-
-/* Status messages */
+/* ── Status ── */
 .status {
-  margin-top: 14px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  display: none;
-  border: 1px solid transparent;
-  font-weight: 500;
+  margin-top:14px;
+  padding:12px 16px;
+  border-radius:10px;
+  font-size:13px;
+  display:none;
+  border:1px solid transparent;
+  font-weight:500;
+  align-items:center;
+  gap:10px;
+  line-height:1.4;
 }
-
-.status.loading {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(255,200,50,0.07);
-  border-color: rgba(255,200,50,0.2);
-  color: #ffd060;
-}
-
-.status.success {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(0,201,110,0.07);
-  border-color: rgba(0,201,110,0.2);
-  color: #00c96e;
-}
-
-.status.error {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(232,49,74,0.07);
-  border-color: rgba(232,49,74,0.2);
-  color: #e8314a;
-}
+.status.loading { display:flex; background:rgba(255,200,50,0.06); border-color:rgba(255,200,50,0.2); color:#ffd060; }
+.status.success { display:flex; background:rgba(125,194,66,0.07); border-color:rgba(125,194,66,0.25); color:#7dc242; }
+.status.error   { display:flex; background:rgba(232,49,74,0.07);  border-color:rgba(232,49,74,0.25);  color:#e8314a; }
 
 .spin {
-  width: 16px; height: 16px; flex-shrink: 0;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  width:15px;height:15px;flex-shrink:0;
+  border:2px solid currentColor;
+  border-top-color:transparent;
+  border-radius:50%;
+  animation:spin .7s linear infinite;
 }
+@keyframes spin{to{transform:rotate(360deg)}}
 
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Footer stats */
+/* ── Footer ── */
 .footer {
-  margin-top: 20px;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  margin-top:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:10px 14px;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:10px;
+  margin-top:14px;
 }
-
-.stat-box {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 8px;
-  text-align: center;
-  transition: border-color 0.25s;
+.sheet-pill {
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid var(--border2);
+  border-radius:5px;
+  padding:3px 9px;
+  color:var(--text);
+  letter-spacing:0.5px;
 }
-
-.stat-box:hover { border-color: var(--border2); }
-
-.stat-box .stat-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  margin: 0 auto 6px;
-}
-
-.stat-box .stat-name {
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: var(--text);
-  display: block;
-  margin-bottom: 2px;
-}
-
-.stat-box .stat-info {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 9px;
-  color: var(--muted);
-  letter-spacing: 0.3px;
-  line-height: 1.4;
-}
-
-/* Output info bar */
-.output-bar {
-  margin-top: 8px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  color: var(--muted);
-  letter-spacing: 0.5px;
-}
-
-.output-bar .out-sheets {
-  display: flex; gap: 6px; flex: 1;
-}
-
-.sheet-tag {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border2);
-  border-radius: 5px;
-  padding: 3px 8px;
-  font-size: 10px;
-  color: var(--text);
+.footer-sep {
+  font-size:10px;
+  color:var(--muted);
+  margin:0 2px;
 }
 </style>
 </head>
 <body>
-
 <div class="wrapper">
 
   <!-- Header -->
   <div class="header">
-    <div class="header-badge">CDR SETTING Tool &nbsp;·&nbsp; v2.0</div>
-    <h1>CDR <span id="netSpan">Processor</span></h1>
-    <p>Caller Detail Record Analysis &nbsp;·&nbsp; All Networks</p>
+    <div class="badge"><div class="badge-dot"></div>CDR SETTING TOOL</div>
+    <h1>CDR <span id="netSpan" style="color:#7dc242">Processor</span></h1>
+    <p>Caller Detail Record Analysis &nbsp;·&nbsp; Multi-Network</p>
   </div>
 
-  <!-- Main card -->
+  <!-- Card -->
   <div class="card">
 
-    <!-- Step 1: Network -->
-    <div class="step-label" data-step="1">Select Network</div>
-    <div class="net-grid">
-      <button class="net-btn zong" onclick="selectNetwork('zong',this)">
-        <div class="net-icon">ZNG</div>
-        <div class="net-info">
-          <span class="net-name">Zong</span>
-        </div>
-        <div class="net-check">✓</div>
-      </button>
-      <button class="net-btn ufone" onclick="selectNetwork('ufone',this)">
-        <div class="net-icon">UFN</div>
-        <div class="net-info">
-          <span class="net-name">Ufone</span>
-        </div>
-        <div class="net-check">✓</div>
-      </button>
-      <button class="net-btn jazz" onclick="selectNetwork('jazz',this)">
-        <div class="net-icon">JAZ</div>
-        <div class="net-info">
-          <span class="net-name">Jazz</span>
-        </div>
-        <div class="net-check">✓</div>
-      </button>
-      <button class="net-btn telenor" onclick="selectNetwork('telenor',this)">
-        <div class="net-icon">TLN</div>
-        <div class="net-info">
-          <span class="net-name">Telenor</span>
-        </div>
-        <div class="net-check">✓</div>
-      </button>
+    <!-- Step 1 -->
+    <div class="step-label">
+      <div class="step-num">1</div>Select Your Network
     </div>
 
-    <hr class="divider"/>
+    <div class="net-grid">
 
-    <!-- Step 2: File -->
-    <div class="step-label" data-step="2">Upload CDR File</div>
+      <!-- ZONG -->
+      <button class="net-btn zong" onclick="selectNet('zong',this)">
+        <div class="net-check">✓</div>
+        <div class="net-logo">
+          <!-- Zong SVG logo: green ring with inner circle and stem -->
+          <svg viewBox="0 0 120 80" width="72" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="36" r="30" stroke="#7dc242" stroke-width="11" fill="none"
+              stroke-dasharray="155 30" stroke-dashoffset="-8" stroke-linecap="round"/>
+            <circle cx="60" cy="36" r="13" fill="#7dc242"/>
+            <rect x="55" y="62" width="10" height="14" rx="5" fill="#7dc242"/>
+          </svg>
+        </div>
+        <div class="net-label-row">
+          <span class="net-title">Zong</span>
+          
+        </div>
+      </button>
+
+      <!-- UFONE -->
+      <button class="net-btn ufone" onclick="selectNet('ufone',this)">
+        <div class="net-check">✓</div>
+        <div class="net-logo">
+          <!-- Ufone SVG: "u" green, "fone" orange -->
+          <svg viewBox="0 0 130 60" width="78" height="46" xmlns="http://www.w3.org/2000/svg">
+            <text x="2" y="52" font-family="Arial Black,sans-serif" font-size="58" font-weight="900" fill="#6aaa1e">u</text>
+            <text x="40" y="52" font-family="Arial Black,sans-serif" font-size="44" font-weight="900" fill="#f47920">fone</text>
+          </svg>
+        </div>
+        <div class="net-label-row">
+          <span class="net-title">Ufone</span>
+          
+        </div>
+      </button>
+
+      <!-- JAZZ -->
+      <button class="net-btn jazz" onclick="selectNet('jazz',this)">
+        <div class="net-check" style="color:#1a1a1a">✓</div>
+        <div class="net-logo">
+          <!-- Jazz SVG: dark red circle with yellow text -->
+          <svg viewBox="0 0 100 70" width="68" height="46" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="38" r="32" fill="#8b1a1a"/>
+            <!-- dot pattern suggestion -->
+            <circle cx="34" cy="24" r="3" fill="#c0392b" opacity="0.7"/>
+            <circle cx="46" cy="20" r="3" fill="#e74c3c" opacity="0.6"/>
+            <circle cx="58" cy="22" r="3" fill="#c0392b" opacity="0.7"/>
+            <circle cx="66" cy="30" r="3" fill="#e74c3c" opacity="0.5"/>
+            <circle cx="68" cy="42" r="3" fill="#c0392b" opacity="0.6"/>
+            <circle cx="36" cy="50" r="3" fill="#e74c3c" opacity="0.5"/>
+            <circle cx="28" cy="38" r="3" fill="#c0392b" opacity="0.6"/>
+            <text x="50" y="50" font-family="Arial Black,sans-serif" font-size="26"
+              font-weight="900" fill="#ffd700" text-anchor="middle"
+              font-style="italic">Jazz</text>
+          </svg>
+        </div>
+        <div class="net-label-row">
+          <span class="net-title">Jazz</span>
+          
+        </div>
+      </button>
+
+      <!-- TELENOR -->
+      <button class="net-btn telenor" onclick="selectNet('telenor',this)">
+        <div class="net-check">✓</div>
+        <div class="net-logo">
+          <!-- Telenor SVG: 3-petal teardrop mark + wordmark -->
+          <svg viewBox="0 0 130 70" width="78" height="46" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Top petal -->
+            <ellipse cx="38" cy="20" rx="10" ry="16"
+              transform="rotate(-30 38 20)" fill="#009ee0"/>
+            <!-- Bottom-left petal -->
+            <ellipse cx="20" cy="44" rx="10" ry="16"
+              transform="rotate(20 20 44)" fill="#009ee0"/>
+            <!-- Bottom-right petal -->
+            <ellipse cx="50" cy="50" rx="10" ry="16"
+              transform="rotate(-60 50 50)" fill="#009ee0"/>
+            <!-- Central dot -->
+            <circle cx="35" cy="38" r="6" fill="#009ee0"/>
+            <!-- Wordmark -->
+            <text x="68" y="50" font-family="Arial,sans-serif" font-size="22"
+              font-weight="400" fill="#009ee0">telenor</text>
+          </svg>
+        </div>
+        <div class="net-label-row">
+          <span class="net-title">Telenor</span>
+          
+        </div>
+      </button>
+
+    </div>
+
+    <hr class="div"/>
+
+    <!-- Step 2 -->
+    <div class="step-label">
+      <div class="step-num">2</div>Upload CDR File
+    </div>
+
     <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-      <div class="drop-icon-wrap">📂</div>
-      <div class="drop-text">Tap or drag to upload</div>
+      <div class="upload-icon">📂</div>
+      <div class="drop-text">Tap or drag file here</div>
       <div class="drop-hint">.XLSX &nbsp;·&nbsp; .XLS &nbsp;·&nbsp; .CSV</div>
-      <div class="file-name" id="fileName"></div>
+      <div class="file-tag" id="fileTag"></div>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
     </div>
 
     <!-- Process button -->
-    <button class="process-btn" id="processBtn" onclick="uploadFile()" disabled>
+    <button class="proc-btn" id="procBtn" onclick="uploadFile()" disabled>
       Select Network &amp; File
     </button>
 
@@ -607,123 +521,97 @@ body::after {
 
   </div>
 
-  <!-- Footer: network info cards -->
+  <!-- Footer pills -->
   <div class="footer">
-    <div class="stat-box">
-      <div class="stat-dot" style="background:var(--zong);box-shadow:0 0 6px var(--zong)"></div>
-      <span class="stat-name">Zong</span>
-      <span class="stat-info">xlsx · csv</span>
-    </div>
-    <div class="stat-box">
-      <div class="stat-dot" style="background:var(--ufone);box-shadow:0 0 6px var(--ufone)"></div>
-      <span class="stat-name">Ufone</span>
-      <span class="stat-info">xlsx · csv</span>
-    </div>
-    <div class="stat-box">
-      <div class="stat-dot" style="background:var(--jazz);box-shadow:0 0 6px var(--jazz)"></div>
-      <span class="stat-name">Jazz</span>
-      <span class="stat-info">xlsx · csv</span>
-    </div>
-    <div class="stat-box">
-      <div class="stat-dot" style="background:var(--telenor);box-shadow:0 0 6px var(--telenor)"></div>
-      <span class="stat-name">Telenor</span>
-      <span class="stat-info">xlsx · csv</span>
-    </div>
-  </div>
-
-  <!-- Output info -->
-  <div class="output-bar">
-    <span>Output sheets:</span>
-    <div class="out-sheets">
-      <span class="sheet-tag">CDR</span>
-      <span class="sheet-tag">Summary</span>
-      <span class="sheet-tag">I2</span>
-    </div>
-    <span> Powered by Numan Ijaz & Team CFU Charsadda</span>
+    <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">OUTPUT</span>
+    <span class="footer-sep">·</span>
+    <span class="sheet-pill">CDR</span>
+    <span class="sheet-pill">Summary</span>
+    <span class="sheet-pill">I2</span>
+    <span class="footer-sep">·</span>
+    <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);">Power by Numan Ijaz & Team CFU Charsadda</span>
   </div>
 
 </div>
 
 <script>
-  let selectedNetwork = '';
-  let selectedFile    = null;
+  let selNet  = '';
+  let selFile = null;
 
-  const fileInput  = document.getElementById('fileInput');
-  const fileNameEl = document.getElementById('fileName');
-  const processBtn = document.getElementById('processBtn');
-  const statusEl   = document.getElementById('status');
-  const dropZone   = document.getElementById('dropZone');
-  const netSpan    = document.getElementById('netSpan');
+  const fileInput = document.getElementById('fileInput');
+  const fileTag   = document.getElementById('fileTag');
+  const procBtn   = document.getElementById('procBtn');
+  const statusEl  = document.getElementById('status');
+  const dropZone  = document.getElementById('dropZone');
+  const netSpan   = document.getElementById('netSpan');
 
-  const netColors = { zong:'--zong', ufone:'--ufone', jazz:'--jazz', telenor:'--telenor' };
-  const netNames  = { zong:'Zong', ufone:'Ufone', jazz:'Jazz', telenor:'Telenor' };
+  const COLORS = {
+    zong:'#7dc242', ufone:'#f47920', jazz:'#ffd700', telenor:'#009ee0'
+  };
+  const NAMES = {
+    zong:'Zong', ufone:'Ufone', jazz:'Jazz', telenor:'Telenor'
+  };
 
-  function selectNetwork(net, btn) {
-    document.querySelectorAll('.net-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedNetwork = net;
-    netSpan.textContent = netNames[net];
-    netSpan.style.color = `var(${netColors[net]})`;
-    updateButton();
+  function selectNet(net, btn) {
+    document.querySelectorAll('.net-btn').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    selNet = net;
+    netSpan.textContent = NAMES[net];
+    netSpan.style.color = COLORS[net];
+    updateBtn();
   }
 
   fileInput.addEventListener('change', () => {
     if (fileInput.files.length > 0) {
-      selectedFile = fileInput.files[0];
-      fileNameEl.textContent = '📄 ' + selectedFile.name;
-      fileNameEl.classList.add('visible');
-      clearStatus(); updateButton();
+      selFile = fileInput.files[0];
+      fileTag.textContent = '📄 ' + selFile.name;
+      fileTag.classList.add('show');
+      clearStatus(); updateBtn();
     }
   });
 
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault(); dropZone.classList.add('dragover');
-  });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
   dropZone.addEventListener('drop', e => {
-    e.preventDefault(); dropZone.classList.remove('dragover');
+    e.preventDefault(); dropZone.classList.remove('over');
     if (e.dataTransfer.files.length > 0) {
-      selectedFile = e.dataTransfer.files[0];
-      fileNameEl.textContent = '📄 ' + selectedFile.name;
-      fileNameEl.classList.add('visible');
-      clearStatus(); updateButton();
+      selFile = e.dataTransfer.files[0];
+      fileTag.textContent = '📄 ' + selFile.name;
+      fileTag.classList.add('show');
+      clearStatus(); updateBtn();
     }
   });
 
-  function updateButton() {
-    const ready = selectedNetwork && selectedFile;
-    processBtn.disabled = !ready;
-    processBtn.className = 'process-btn';
+  function updateBtn() {
+    const ready = selNet && selFile;
+    procBtn.disabled = !ready;
+    procBtn.className = 'proc-btn';
     if (!ready) {
-      if (!selectedNetwork && !selectedFile)
-        processBtn.textContent = 'Select Network & File';
-      else if (!selectedNetwork)
-        processBtn.textContent = 'Select a Network First';
-      else
-        processBtn.textContent = 'Select a File First';
+      procBtn.textContent = !selNet ? 'Select a Network First'
+                          : 'Select a File First';
       return;
     }
-    processBtn.classList.add('ready-' + selectedNetwork);
-    processBtn.textContent = `Process ${netNames[selectedNetwork]} CDR →`;
+    procBtn.classList.add('go', 'go-' + selNet);
+    procBtn.textContent = `Process ${NAMES[selNet]} CDR →`;
   }
 
   function clearStatus() {
-    statusEl.className = 'status'; statusEl.innerHTML = '';
+    statusEl.className='status'; statusEl.innerHTML='';
   }
 
   function showStatus(type, msg) {
-    statusEl.className = 'status ' + type; statusEl.innerHTML = msg;
+    statusEl.className='status '+type; statusEl.innerHTML=msg;
   }
 
   async function uploadFile() {
-    if (!selectedFile || !selectedNetwork) return;
-    processBtn.disabled = true;
+    if (!selFile || !selNet) return;
+    procBtn.disabled = true;
     showStatus('loading',
-      `<div class="spin"></div><span>Processing ${netNames[selectedNetwork]} CDR — please wait…</span>`);
+      `<div class="spin"></div><span>Processing ${NAMES[selNet]} CDR file — please wait…</span>`);
 
     const fd = new FormData();
-    fd.append('file', selectedFile);
-    fd.append('network', selectedNetwork);
+    fd.append('file', selFile);
+    fd.append('network', selNet);
 
     try {
       const res = await fetch('/process', { method:'POST', body:fd });
@@ -740,15 +628,15 @@ body::after {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         showStatus('success',
-          `<span>✓</span><span>${netNames[selectedNetwork]} CDR processed — file downloaded successfully</span>`);
+          `<span>✓</span><span>${NAMES[selNet]} CDR processed successfully — file downloaded!</span>`);
       } else {
         const d = await res.json();
-        showStatus('error', `<span>✕</span><span>${d.error || 'Something went wrong'}</span>`);
+        showStatus('error',`<span>✕</span><span>${d.error||'Something went wrong'}</span>`);
       }
     } catch(e) {
-      showStatus('error', `<span>✕</span><span>Cannot connect to server — check your internet</span>`);
+      showStatus('error','<span>✕</span><span>Cannot connect — check your internet</span>');
     } finally {
-      processBtn.disabled = false;
+      procBtn.disabled = false;
     }
   }
 </script>
